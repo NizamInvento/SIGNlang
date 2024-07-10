@@ -1,0 +1,131 @@
+import pickle
+import cv2
+import mediapipe as mp
+import numpy as np
+import customtkinter as ctk
+
+# Load the pre-trained model
+model_dict = pickle.load(open('./model.p', 'rb'))
+model = model_dict['model']
+
+# Initialize the webcam
+cap = cv2.VideoCapture(0)
+
+# Initialize Mediapipe Hands
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+
+hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
+
+# Define labels dictionary
+labels_dict = {0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 98: 'super aayind', 99: 'I love you ttooo', 100: 'Not recognisable image', 101: 'Arun Sir njangade aiswaryam', 102: 'Hello'}
+
+# Initialize Tkinter
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("green")
+
+# Initialize an empty dictionary to store user information
+user_database = {}
+
+root = ctk.CTk()
+root.geometry("500x400")
+
+frame = ctk.CTkFrame(master=root)
+frame.pack(pady=20, padx=60, fill="both", expand=True)
+
+# Define login and register functions
+def login():
+    username = entry1.get()  # Get username entered by the user
+    password = entry2.get()  # Get password entered by the user
+    
+    if username in user_database and user_database[username] == password:
+        print("Login successful!")
+        start_button.pack(pady=6, padx=10)  # Show the Start button upon successful login
+    else:
+        print("Invalid username or password. Please try again.")
+
+def register():
+    username = entry1.get()  # Get username entered by the user
+    password = entry2.get()  # Get password entered by the user
+    
+    if username in user_database:
+        print("Username already exists. Please choose a different username.")
+    else:
+        user_database[username] = password
+        print("Registration successful! You can now login with your credentials.")
+
+def start_classification():
+    while True:
+        data_aux = []
+        x_ = []
+        y_ = []
+
+        ret, frame = cap.read()
+
+        H, W, _ = frame.shape
+
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        results = hands.process(frame_rgb)
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                mp_drawing.draw_landmarks(
+                    frame,  # image to draw
+                    hand_landmarks,  # model output
+                    mp_hands.HAND_CONNECTIONS,  # hand connections
+                    mp_drawing_styles.get_default_hand_landmarks_style(),
+                    mp_drawing_styles.get_default_hand_connections_style())
+
+            for hand_landmarks in results.multi_hand_landmarks:
+                for i in range(len(hand_landmarks.landmark)):
+                    x = hand_landmarks.landmark[i].x
+                    y = hand_landmarks.landmark[i].y
+
+                    x_.append(x)
+                    y_.append(y)
+
+                for i in range(len(hand_landmarks.landmark)):
+                    x = hand_landmarks.landmark[i].x
+                    y = hand_landmarks.landmark[i].y
+                    data_aux.append(x - min(x_))
+                    data_aux.append(y - min(y_))
+
+            x1 = int(min(x_) * W) - 10
+            y1 = int(min(y_) * H) - 10
+
+            x2 = int(max(x_) * W) - 10
+            y2 = int(max(y_) * H) - 10
+
+            prediction = model.predict([np.asarray(data_aux)])
+
+            predicted_character = labels_dict[int(prediction[0])]
+
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 4)
+            cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3,
+                        cv2.LINE_AA)
+
+        cv2.imshow('frame', frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+# Create login UI elements
+label = ctk.CTkLabel(master=frame, text="Login or Register")
+label.configure(font=("Roboto", 24))  # Set font size here
+label.pack(pady=12, padx=10)
+
+entry1 = ctk.CTkEntry(master=frame, placeholder_text="username") 
+entry1.pack(pady=12, padx=10)
+
+entry2 = ctk.CTkEntry(master=frame, placeholder_text="password", show="*")  # Show asterisks for password
+entry2.pack(pady=12, padx=10)
+
+login_button = ctk.CTkButton(master=frame, text="Login", command=login)
+login_button.pack(pady=6, padx=10)
+
+register_button = ctk.CTkButton(master=frame, text="Register", command=register)
+register_button.pack(pady=6, padx=10)
+
+start_button = ctk.CTkButton(master=frame, text="Start Classification", command=start_classification)
+
+root.mainloop()
